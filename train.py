@@ -97,6 +97,10 @@ def train(
         description="Prompt that describes part of the image that you will find important. For example, if you are fine-tuning your pet, `photo of a dog` will be a good prompt. Prompt-based masking is used to focus the fine-tuning process on the important/salient parts of the image",
         default=None,
     ),
+     image_type: str = Input(
+        description="the type of the product that the model will fine tune on it",
+        default="Other"
+    ),
     crop_based_on_salience: bool = Input(
         description="If you want to crop the image to `target_size` based on the important parts of the image, set this to True. If you want to crop the image based on face detection, set this to False",
         default=True,
@@ -149,6 +153,7 @@ def train(
         use_face_detection_instead=use_face_detection_instead,
         temp=clipseg_temperature,
         substitution_tokens=list(token_dict.keys()),
+        image_type=image_type,
     )
 
     if not os.path.exists(SDXL_MODEL_CACHE):

@@ -18,6 +18,7 @@ import mediapipe as mp
 import numpy as np
 import pandas as pd
 import torch
+from ultralytics import YOLO
 from PIL import Image, ImageFilter
 from tqdm import tqdm
 from transformers import (
@@ -27,6 +28,8 @@ from transformers import (
     CLIPSegProcessor,
     Swin2SRForImageSuperResolution,
     Swin2SRImageProcessor,
+    SegformerImageProcessor, 
+    AutoModelForSemanticSegmentation,
 )
 
 from predict import download_weights
@@ -63,6 +66,7 @@ def preprocess(
     use_face_detection_instead: bool,
     temp: float,
     substitution_tokens: List[str],
+    image_type: str,
 ) -> Path:
     # assert str(files).endswith(".zip"), "files must be a zip file"
 
@@ -123,6 +127,7 @@ def preprocess(
         use_face_detection_instead=use_face_detection_instead,
         temp=temp,
         substitution_tokens=substitution_tokens,
+        image_type=image_type
     )
 
     return Path(TEMP_OUT_DIR)
@@ -230,6 +235,111 @@ def clipseg_mask_generator(
         masks.append(mask)
 
     return masks
+
+def segformer_mask_generator(
+    images: List[Image.Image],
+    target_prompts: Union[List[str], str],
+    device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
+    bias: float = 0.01,
+) -> List[Image.Image]:
+    """
+    Generates a grayscale mask for each image using a pre-trained Segformer model.
+    """
+    # Load the processor and model
+    processor = SegformerImageProcessor.from_pretrained("mattmdjaga/segformer_b2_clothes")
+    model = AutoModelForSemanticSegmentation.from_pretrained("mattmdjaga/segformer_b2_clothes").to(device)
+
+    # Handle single target prompt
+    if isinstance(target_prompts, str):
+        print(f'Warning: only one target prompt "{target_prompts}" was given, so it will be used for all images')
+        target_prompts = [target_prompts] * len(images)
+    
+    masks = []
+
+    for image, prompt in tqdm(zip(images, target_prompts)):
+        original_size = image.size
+
+        # Preprocess the image
+        inputs = processor(images=image, return_tensors="pt").to(device)  # Move inputs to the same device
+
+        # Get model predictions
+        with torch.no_grad():
+            outputs = model(**inputs)
+
+        # Process logits
+        logits = outputs.logits.squeeze(0)  # Remove batch dimension
+        logits = logits.softmax(dim=0)  # Convert to probabilities
+
+        # Get the class indices for the prompt
+        class_indices = get_class_index_from_prompt_for_segformer(prompt)
+
+        # Initialize an empty mask
+        combined_probs = torch.zeros_like(logits[0])
+
+        # Combine probabilities for all relevant classes
+        for class_idx in class_indices:
+            combined_probs += logits[class_idx]
+
+        # Add bias and normalize
+        combined_probs = (combined_probs + bias).clamp_(0, 1)
+        combined_probs = 255 * combined_probs / combined_probs.max()
+
+        # Convert to grayscale mask
+        mask = Image.fromarray(combined_probs.cpu().numpy().astype(np.uint8)).convert("L")
+
+        # Resize to original image size
+        mask = mask.resize(original_size)
+
+        masks.append(mask)
+
+    return masks
+
+def get_class_index_from_prompt_for_segformer(prompt: str) -> List[int]:
+    # Synonym mapping
+    synonym_mapping = {
+        "upper-clothes": ["t-shirt", "top", "shirt", "blouse", "jacket"],
+        "pants": ["trousers", "jeans"],
+        "left-shoe": ["left shoe", "left-footwear"],
+        "right-shoe": ["right shoe", "right-footwear"],
+        "shoes": ["shoes", "footwear"],  # Could match both left and right
+        # Add more synonyms as needed
+    }
+    
+    # Exact match class mapping
+    class_mapping = {
+        "background": 0,
+        "bag": 16,
+        "belt": 8,
+        "dress": 7,
+        "hat": 1,
+        "left-shoe": 9,
+        "pants": 6,
+        "right-shoe": 10,
+        "scarf": 17,
+        "skirt": 5,
+        "sunglasses": 3,
+        "upper-clothes": 4,
+        # Add more classes if needed
+    }
+    
+    prompt = prompt.lower()
+    
+    # Check if the prompt directly matches a class
+    if prompt in class_mapping:
+        return [class_mapping[prompt]]
+
+    # Check if the prompt matches any synonym and return the corresponding class indices
+    for key, synonyms in synonym_mapping.items():
+        if prompt in synonyms:
+            if key == "shoes":
+                # Return both left-shoe and right-shoe indices for "shoes"
+                return [class_mapping["left-shoe"], class_mapping["right-shoe"]]
+            else:
+                return [class_mapping[key]]
+    
+    # Default to the "Background" class if nothing matches
+    return [class_mapping["background"]]
+
 
 
 @torch.no_grad()
@@ -458,6 +568,7 @@ def load_and_save_masks_and_captions(
     temp: float = 1.0,
     n_length: int = -1,
     substitution_tokens: Optional[List[str]] = None,
+    image_type: str = "Other",
 ):
     """
     Loads images from the given files, generates masks for them, and saves the masks and captions and upscale images
@@ -526,9 +637,14 @@ def load_and_save_masks_and_captions(
 
     print(f"Generating {len(images)} masks...")
     if not use_face_detection_instead:
-        seg_masks = clipseg_mask_generator(
-            images=images, target_prompts=mask_target_prompts, temp=temp
-        )
+        if image_type == "Clothes" or image_type == "Shoes" :
+            seg_masks = segformer_mask_generator(
+                images=images, target=mask_target_prompts
+            )
+        else :
+            seg_masks = clipseg_mask_generator(
+                images=images, target_prompts=mask_target_prompts, temp=temp
+            )
     else:
         seg_masks = face_mask_google_mediapipe(images=images)
 
