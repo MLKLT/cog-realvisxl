@@ -1,0 +1,14 @@
+ultralytics
+opencv-python-headless 
+mediapipe 
+numpy 
+pandas 
+torch 
+pillow 
+tqdm 
+transformers
+cog
+diffusers
+pget
+protobuf==3.20.1 
+requests

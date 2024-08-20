@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import List, Literal, Optional, Tuple, Union
 from zipfile import ZipFile
 
+from torchvision import transforms
 import cv2
 import mediapipe as mp
 import numpy as np
@@ -235,6 +236,60 @@ def clipseg_mask_generator(
         masks.append(mask)
 
     return masks
+def Yolov8_seg_mask_generator(
+    images: List[Image.Image],
+    target_prompts: Union[List[str], str],
+    device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),    
+) -> List[Image.Image]:
+    """
+    Generates a grayscale mask for each image using a pre-trained Yolov8-seg model.
+    """
+    model = YOLO("yolov8n-seg.pt").to(device)
+
+    if isinstance(target_prompts, str):
+        print(f'Warning: only one target prompt "{target_prompts}" was given, so it will be used for all images')
+        target_prompts = [target_prompts] * len(images)
+    
+    masks = []
+
+    # Define the transformation to convert PIL image to tensor, including resizing
+    transform = transforms.Compose([
+        transforms.Resize((640, 640)),  # Resize to 640x640, which is divisible by 32
+        transforms.ToTensor()
+    ])
+
+    for image, prompt in tqdm(zip(images, target_prompts)):
+        original_w, original_h = image.size
+        
+        # Convert PIL image to tensor and move it to the appropriate device
+        image_tensor = transform(image).unsqueeze(0).to(device)
+        
+        # Predict with the model
+        results = model(image_tensor)  # predict on an image 
+
+        # Get the masks and the corresponding class IDs from the results
+        masks_tensor = results[0].masks.data.cpu().numpy()  # Convert mask data to numpy array (BxHxW)
+        class_ids = results[0].boxes.cls.cpu().numpy()  # Extract class IDs for the objects detected
+
+        # Define the class ID for the prompt
+        geted_class_id = get_class_index_from_prompt_for_yolov8_seg(prompt)
+        
+        # Filter the masks to get only the masks for the specific prompt
+        class_masks = masks_tensor[class_ids == geted_class_id]  # This will filter the masks corresponding to the prompt
+
+        # Plot each object mask separately
+        for i in range(class_masks.shape[0]):  # Iterate through the masks
+            mask = class_masks[i]
+            
+            # Resize the mask to match the original image size (if needed)
+            resized_mask = cv2.resize(mask, (original_w, original_h), interpolation=cv2.INTER_NEAREST)
+            
+            # Convert mask to binary (threshold = 0.5)
+            binary_mask = resized_mask > 0.5
+            binary_mask_image = Image.fromarray((binary_mask * 255).astype(np.uint8))  # Convert boolean mask to 0-255 image
+            masks.append(binary_mask_image)
+    
+    return masks
 
 def segformer_mask_generator(
     images: List[Image.Image],
@@ -339,6 +394,100 @@ def get_class_index_from_prompt_for_segformer(prompt: str) -> List[int]:
     
     # Default to the "Background" class if nothing matches
     return [class_mapping["background"]]
+
+def get_class_index_from_prompt_for_yolov8_seg(prompt:str) -> int :
+    
+    class_mapping ={
+        'person': 0, 
+        'bicycle': 1, 
+        'car': 2, 
+        'motorcycle': 3, 
+        'airplane': 4, 
+        'bus': 5, 
+        'train': 6, 
+        'truck': 7, 
+        'boat': 8, 
+        'traffic light': 9, 
+        'fire hydrant': 10, 
+        'stop sign': 11, 
+        'parking meter': 12, 
+        'bench': 13, 
+        'bird': 14, 
+        'cat': 15, 
+        'dog': 16, 
+        'horse': 17, 
+        'sheep': 18, 
+        'cow': 19, 
+        'elephant': 20, 
+        'bear': 21, 
+        'zebra': 22, 
+        'giraffe': 23, 
+        'backpack': 24, 
+        'umbrella': 25, 
+        'handbag': 26, 
+        'tie': 27, 
+        'suitcase': 28, 
+        'frisbee': 29, 
+        'skis': 30, 
+        'snowboard': 31, 
+        'sports ball': 32, 
+        'kite': 33, 
+        'baseball bat': 34, 
+        'baseball glove': 35, 
+        'skateboard': 36, 
+        'surfboard': 37, 
+        'tennis racket': 38, 
+        'bottle': 39, 
+        'wine glass': 40, 
+        'cup': 41, 
+        'fork': 42, 
+        'knife': 43, 
+        'spoon': 44, 
+        'bowl': 45, 
+        'banana': 46, 
+        'apple': 47, 
+        'sandwich': 48, 
+        'orange': 49, 
+        'broccoli': 50, 
+        'carrot': 51, 
+        'hot dog': 52, 
+        'pizza': 53, 
+        'donut': 54, 
+        'cake': 55, 
+        'chair': 56, 
+        'couch': 57, 
+        'potted plant': 58, 
+        'bed': 59, 
+        'dining table': 60, 
+        'toilet': 61, 
+        'tv': 62, 
+        'laptop': 63, 
+        'mouse': 64, 
+        'remote': 65, 
+        'keyboard': 66, 
+        'cell phone': 67, 
+        'microwave': 68, 
+        'oven': 69, 
+        'toaster': 70, 
+        'sink': 71, 
+        'refrigerator': 72, 
+        'book': 73, 
+        'clock': 74, 
+        'vase': 75,
+        'scissors': 76,
+        'teddy bear': 77,
+        'hair drier': 78,
+        'toothbrush': 79
+    }
+    
+    prompt = prompt.lower()
+    
+    # Check if the prompt directly matches a class
+    
+    if prompt in class_mapping:
+        return class_mapping[prompt]
+    else:
+        return 999
 
 
 
@@ -637,9 +786,13 @@ def load_and_save_masks_and_captions(
 
     print(f"Generating {len(images)} masks...")
     if not use_face_detection_instead:
-        if image_type == "Clothes" or image_type == "Shoes" :
+        if image_type in["Clothes","Shoes","Style"]:
             seg_masks = segformer_mask_generator(
                 images=images, target=mask_target_prompts
+            )
+        elif image_type in ["Electronics","Cars","Beverages","Foods","Pets","Animal"]:
+            seg_masks = Yolov8_seg_mask_generator(
+                images=images, target_promts=mask_target_prompts
             )
         else :
             seg_masks = clipseg_mask_generator(
