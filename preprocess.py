@@ -788,7 +788,7 @@ def load_and_save_masks_and_captions(
     if not use_face_detection_instead:
         if image_type in["Clothes","Shoes","Style"]:
             seg_masks = segformer_mask_generator(
-                images=images, target=mask_target_prompts
+                images=images, target_prompts=mask_target_prompts
             )
         elif image_type in ["Electronics","Cars","Beverages","Foods","Pets","Animal"]:
             seg_masks = Yolov8_seg_mask_generator(
