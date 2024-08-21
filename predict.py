@@ -7,6 +7,10 @@ import time
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from weights import WeightsDownloadCache
 
+import requests
+import tarfile
+import time
+import os
 import numpy as np
 import torch
 from cog import BasePredictor, Input, Path
