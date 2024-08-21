@@ -61,10 +61,26 @@ SCHEDULERS = {
 
 def download_weights(url, dest):
     start = time.time()
-    print("downloading url: ", url)
-    print("downloading to: ", dest)
-    subprocess.check_call(["pget", url, dest], close_fds=False)
-    print("downloading took: ", time.time() - start)
+    print("Downloading URL: ", url)
+    print("Downloading to: ", dest)
+    
+    try:
+        # Use subprocess.run to capture output and errors
+        result = subprocess.run(
+            ["pget", url, dest],
+            check=True,   # This will raise CalledProcessError on non-zero exit status
+            text=True,    # This will return output as text instead of bytes
+            capture_output=True  # Capture stdout and stderr
+        )
+        # Print output and error messages for debugging
+        print("Output:", result.stdout)
+        print("Error (if any):", result.stderr)
+    except subprocess.CalledProcessError as e:
+        print(f"Error occurred: {e}")
+        print("Output:", e.output)
+        print("Error:", e.stderr)
+    
+    print("Downloading took: ", time.time() - start)
 
 
 class Predictor(BasePredictor):
