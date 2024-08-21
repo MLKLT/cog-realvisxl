@@ -8,7 +8,7 @@ pillow
 tqdm 
 transformers
 cog
-diffusers
+diffusers==0.18.0
 pget
 protobuf==3.20.1 
 requests
