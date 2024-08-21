@@ -61,26 +61,32 @@ SCHEDULERS = {
 
 def download_weights(url, dest):
     start = time.time()
-    print("Downloading URL: ", url)
-    print("Downloading to: ", dest)
-    
-    try:
-        # Use subprocess.run to capture output and errors
-        result = subprocess.run(
-            ["pget", url, dest],
-            check=True,   # This will raise CalledProcessError on non-zero exit status
-            text=True,    # This will return output as text instead of bytes
-            capture_output=True  # Capture stdout and stderr
-        )
-        # Print output and error messages for debugging
-        print("Output:", result.stdout)
-        print("Error (if any):", result.stderr)
-    except subprocess.CalledProcessError as e:
-        print(f"Error occurred: {e}")
-        print("Output:", e.output)
-        print("Error:", e.stderr)
-    
-    print("Downloading took: ", time.time() - start)
+    print("Downloading from URL:", url)
+    print("Downloading to:", dest)
+
+    # Create the destination directory if it doesn't exist
+    os.makedirs(dest, exist_ok=True)
+
+    tar_path = os.path.join(dest, 'downloaded_file.tar')  # Temporary tar file path
+
+    # Download the file using requests
+    response = requests.get(url, stream=True)
+    response.raise_for_status()  # Raise an error on bad status
+
+    # Write the downloaded content to a temporary tar file
+    with open(tar_path, 'wb') as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            if chunk:  # filter out keep-alive new chunks
+                f.write(chunk)
+
+    # Extract the tar file
+    with tarfile.open(tar_path, 'r') as tar:
+        tar.extractall(path=dest)
+
+    # Clean up by removing the temporary tar file
+    os.remove(tar_path)
+
+    print("Downloading and extraction took:", time.time() - start)
 
 
 class Predictor(BasePredictor):
