@@ -169,8 +169,6 @@ def main(
                 hidden_size=hidden_size,
                 cross_attention_dim=cross_attention_dim,
                 rank=lora_rank,
-                 device=torch.device("cuda" if torch.cuda.is_available() else "cpu"), # Pass the device explicitly
-                dtype=torch.float32,
             )
             unet_lora_attn_procs[name] = module
             module.to(device)
