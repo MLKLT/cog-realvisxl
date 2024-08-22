@@ -166,9 +166,9 @@ def main(
                 hidden_size = unet.config.block_out_channels[block_id]
 
             module = LoRAAttnProcessor2_0(
-                hidden_size=hidden_size,
-                cross_attention_dim=cross_attention_dim,
-                rank=lora_rank,
+                hidden_size=int(hidden_size),
+                cross_attention_dim=int(cross_attention_dim),
+                rank=int(lora_rank),
             )
             unet_lora_attn_procs[name] = module
             module.to(device)
