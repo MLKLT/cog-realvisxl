@@ -117,8 +117,29 @@ class WeightsDownloadCache:
         st = time.time()
         # maybe retry with the real url if this doesn't work
         try:
-            output = subprocess.check_output(["pget", "-x", url, dest], close_fds=True)
-            print(output)
+            # Create the destination directory if it doesn't exist
+            os.makedirs(dest, exist_ok=True)
+        
+            tar_path = os.path.join(dest, 'downloaded_file.tar')  # Temporary tar file path
+        
+            # Download the file using requests
+            response = requests.get(url, stream=True)
+            response.raise_for_status()  # Raise an error on bad status
+        
+            # Write the downloaded content to a temporary tar file
+            with open(tar_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:  # filter out keep-alive new chunks
+                        f.write(chunk)
+        
+            # Extract the tar file
+            with tarfile.open(tar_path, 'r') as tar:
+                tar.extractall(path=dest)
+        
+            # Clean up by removing the temporary tar file
+            os.remove(tar_path)
+        
+            print("Downloading done")
         except subprocess.CalledProcessError as e:
             # If download fails, clean up and re-raise exception
             print(e.output)
