@@ -4,6 +4,8 @@ import os
 import shutil
 import subprocess
 import time
+import requests
+import tarfile
 
 
 class WeightsDownloadCache:
