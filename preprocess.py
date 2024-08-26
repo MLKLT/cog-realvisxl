@@ -259,7 +259,7 @@ def Yolov8_seg_mask_generator(
     ])
 
     for image, prompt in tqdm(zip(images, target_prompts)):
-        original_w, original_h = image.size
+        original_size = image.size
         
         # Convert PIL image to tensor and move it to the appropriate device
         image_tensor = transform(image).unsqueeze(0).to(device)
@@ -278,16 +278,15 @@ def Yolov8_seg_mask_generator(
         class_masks = masks_tensor[class_ids == geted_class_id]  # This will filter the masks corresponding to the prompt
 
         # Plot each object mask separately
-        for i in range(class_masks.shape[0]):  # Iterate through the masks
-            mask = class_masks[i]
+        mask = class_masks[0]
             
-            # Resize the mask to match the original image size (if needed)
-            resized_mask = cv2.resize(mask, (original_w, original_h), interpolation=cv2.INTER_NEAREST)
-            
-            # Convert mask to binary (threshold = 0.5)
-            binary_mask = resized_mask > 0.5
-            binary_mask_image = Image.fromarray((binary_mask * 255).astype(np.uint8))  # Convert boolean mask to 0-255 image
-            masks.append(binary_mask_image)
+        # Resize the mask to match the original image size (if needed)
+        resized_mask = mask.resize(original_size)
+
+        # Convert mask to binary (threshold = 0.5)
+        binary_mask = resized_mask > 0.5
+        binary_mask_image = Image.fromarray((binary_mask * 255).astype(np.uint8))  # Convert boolean mask to 0-255 image
+        masks.append(binary_mask_image)
     
     return masks
 
