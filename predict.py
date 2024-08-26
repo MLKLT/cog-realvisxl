@@ -108,7 +108,7 @@ class Predictor(BasePredictor):
 
         #local_weights_cache = self.weights_cache.ensure(weights)
         #--------local test---------
-        local_weights_cache = path(weights)
+        local_weights_cache = weights
 
         # load UNET
         print("Loading fine-tuned model")
