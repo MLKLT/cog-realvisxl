@@ -267,6 +267,11 @@ def Yolov8_seg_mask_generator(
         # Predict with the model
         results = model(image_tensor)  # predict on an image 
 
+        if results[0] is None or results[0].masks is None:
+            print(f"No objects detected for the prompt '{prompt}'. Skipping this image.")
+            masks.append(Image.new('L', original_size, 0))  # Append a blank mask
+            continue
+
         # Get the masks and the corresponding class IDs from the results
         masks_tensor = results[0].masks.data.cpu().numpy()  # Convert mask data to numpy array (BxHxW)
         class_ids = results[0].boxes.cls.cpu().numpy()  # Extract class IDs for the objects detected
@@ -277,11 +282,16 @@ def Yolov8_seg_mask_generator(
         # Filter the masks to get only the masks for the specific prompt
         class_masks = masks_tensor[class_ids == geted_class_id]  # This will filter the masks corresponding to the prompt
 
+        if len(class_masks) == 0:
+            print(f"No matching objects for the prompt '{prompt}'. Skipping this image.")
+            masks.append(Image.new('L', original_size, 0))  # Append a blank mask
+            continue
+
         # Plot each object mask separately
         mask = class_masks[0]
             
         # Resize the mask to match the original image size (if needed)
-        resized_mask = mask.resize(original_size)
+        resized_mask = Image.fromarray(mask).resize(original_size)
 
         # Convert mask to binary (threshold = 0.5)
         binary_mask = resized_mask > 0.5
