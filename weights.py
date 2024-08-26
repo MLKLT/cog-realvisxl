@@ -6,7 +6,7 @@ import subprocess
 import time
 import requests
 import tarfile
-
+from pathlib import Path
 
 class WeightsDownloadCache:
     def __init__(
