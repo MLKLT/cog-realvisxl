@@ -792,7 +792,7 @@ def load_and_save_masks_and_captions(
             )
         elif image_type in ["Electronics","Cars","Beverages","Foods","Pets","Animal"]:
             seg_masks = Yolov8_seg_mask_generator(
-                images=images, target_promts=mask_target_prompts
+                images=images, target_prompts=mask_target_prompts
             )
         else :
             seg_masks = clipseg_mask_generator(
