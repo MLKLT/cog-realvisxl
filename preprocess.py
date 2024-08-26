@@ -294,7 +294,7 @@ def Yolov8_seg_mask_generator(
         resized_mask = Image.fromarray(mask).resize(original_size)
 
         # Convert mask to binary (threshold = 0.5)
-        binary_mask = resized_mask > 0.5
+        binary_mask = np.array(resized_mask) > 0.5
         binary_mask_image = Image.fromarray((binary_mask * 255).astype(np.uint8))  # Convert boolean mask to 0-255 image
         masks.append(binary_mask_image)
     
